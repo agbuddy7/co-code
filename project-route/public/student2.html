@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Student Coding Area</title>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <h2>Student Coding Area</h2>
+ 
+  <h3>Student 3</h3>
+  <textarea id="studentText2" rows="15" cols="60" placeholder="Student 3 - Type your code here..."></textarea>
+
+  <script>
+    const socket = io();
+    
+    
+    // Student 3 textarea
+    const textarea3 = document.getElementById('studentText2');
+    textarea3.addEventListener('input', () => {
+      socket.emit('student_text2', textarea3.value);
+    });
+  </script>
+</body>
+</html>

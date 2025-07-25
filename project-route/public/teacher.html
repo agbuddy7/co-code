@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .students-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+        }
+        .student-panel {
+            background: white;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .student-header {
+            background-color: #007bff;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .student-code {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            min-height: 200px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .no-students {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            grid-column: 1 / -1;
+        }
+        .student-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Teacher Dashboard</h1>
+        <p>Real-time view of all student coding sessions</p>
+        <div id="connectionStatus">Connecting...</div>
+    </div>
+    
+    <div class="students-container" id="studentsContainer">
+        <div class="no-students">No students connected yet. Students can join at: <strong>http://localhost:3000</strong></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const studentsContainer = document.getElementById('studentsContainer');
+        const connectionStatus = document.getElementById('connectionStatus');
+        
+        let students = {};
+        
+        // Join as teacher
+        socket.emit('teacher_join');
+        
+        // Receive all students data when joining
+        socket.on('all_students_data', (studentsData) => {
+            students = {};
+            studentsData.forEach(student => {
+                students[student.id] = student;
+            });
+            updateStudentsDisplay();
+        });
+        
+        // Receive real-time text updates
+        socket.on('text_updated', (data) => {
+            if (students[data.studentId]) {
+                students[data.studentId].currentText = data.text;
+                updateStudentCode(data.studentId, data.text);
+            }
+        });
+        
+        // Connection status
+        socket.on('connect', () => {
+            connectionStatus.textContent = 'Connected to server';
+            connectionStatus.style.color = 'green';
+        });
+        
+        socket.on('disconnect', () => {
+            connectionStatus.textContent = 'Disconnected from server';
+            connectionStatus.style.color = 'red';
+        });
+        
+        function updateStudentsDisplay() {
+            const studentIds = Object.keys(students);
+            
+            if (studentIds.length === 0) {
+                studentsContainer.innerHTML = '<div class="no-students">No students connected yet. Students can join at: <strong>http://localhost:3000</strong></div>';
+                return;
+            }
+            
+            let html = '';
+            studentIds.forEach(studentId => {
+                const student = students[studentId];
+                html += `
+                    <div class="student-panel" id="panel_${studentId}">
+                        <div class="student-header">
+                            ${student.name}
+                            <div class="student-info">ID: ${studentId} | Joined: ${new Date(student.joinTime).toLocaleTimeString()}</div>
+                        </div>
+                        <div class="student-code" id="code_${studentId}">${student.currentText || 'No code yet...'}</div>
+                    </div>
+                `;
+            });
+            
+            studentsContainer.innerHTML = html;
+        }
+        
+        function updateStudentCode(studentId, text) {
+            const codeElement = document.getElementById(`code_${studentId}`);
+            if (codeElement) {
+                codeElement.textContent = text || 'No code yet...';
+            }
+        }
+        
+        // Refresh students list every 30 seconds
+        setInterval(() => {
+            socket.emit('teacher_join');
+        }, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coding Classroom</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .join-form {
+            margin: 30px 0;
+        }
+        input[type="text"] {
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            margin: 10px;
+            width: 250px;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .teacher-btn {
+            background-color: #28a745;
+        }
+        .teacher-btn:hover {
+            background-color: #1e7e34;
+        }
+        .links {
+            margin-top: 30px;
+        }
+        .error {
+            color: red;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Coding Classroom</h1>
+        
+        <div class="join-form">
+            <h2>Join as Student</h2>
+            <input type="text" id="studentName" placeholder="Enter your name" maxlength="50">
+            <br>
+            <button onclick="joinAsStudent()">Join Coding Session</button>
+            <div id="error" class="error"></div>
+        </div>
+        
+        <div class="links">
+            <h2>Or</h2>
+            <button class="teacher-btn" onclick="goToTeacher()">View as Teacher</button>
+        </div>
+    </div>
+
+    <script>
+        async function joinAsStudent() {
+            const name = document.getElementById('studentName').value.trim();
+            const errorDiv = document.getElementById('error');
+            
+            if (!name) {
+                errorDiv.textContent = 'Please enter your name';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/create-student', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name })
+                });
+                
+                const data = await response.json();
+                window.location.href = data.redirectUrl;
+            } catch (error) {
+                errorDiv.textContent = 'Error creating student session. Please try again.';
+                console.error('Error:', error);
+            }
+        }
+        
+        function goToTeacher() {
+            window.location.href = '/teacher.html';
+        }
+        
+        // Allow Enter key to join
+        document.getElementById('studentName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                joinAsStudent();
+            }
+        });
+    </script>
+</body>
+</html>

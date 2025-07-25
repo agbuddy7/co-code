@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Coding Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        #studentInfo {
+            font-size: 18px;
+            color: #333;
+        }
+        #codeEditor {
+            width: 100%;
+            height: 500px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            background-color: white;
+            resize: vertical;
+            box-sizing: border-box;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div id="studentInfo">Loading...</div>
+    </div>
+    
+    <textarea id="codeEditor" placeholder="Start typing your code here..."></textarea>
+    
+    <div class="status" id="status">Connected - Your code is being shared with the teacher in real-time</div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Get student ID from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const studentId = urlParams.get('id');
+        
+        if (!studentId) {
+            alert('Invalid student session. Redirecting to home page.');
+            window.location.href = '/';
+        }
+        
+        // Update student info display
+        document.getElementById('studentInfo').textContent = `Student ID: ${studentId}`;
+        
+        const socket = io();
+        const codeEditor = document.getElementById('codeEditor');
+        const statusDiv = document.getElementById('status');
+        
+        // Join as student and get current text
+        socket.emit('student_join', studentId);
+        
+        // Receive current text when joining
+        socket.on('student_current_text', (data) => {
+            if (data.studentId === studentId) {
+                codeEditor.value = data.text;
+            }
+        });
+        
+        // Send text updates to server
+        let timeout;
+        codeEditor.addEventListener('input', () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                socket.emit('student_text_update', {
+                    studentId: studentId,
+                    text: codeEditor.value
+                });
+            }, 300); // Debounce for 300ms
+        });
+        
+        // Connection status updates
+        socket.on('connect', () => {
+            statusDiv.textContent = 'Connected - Your code is being shared with the teacher in real-time';
+            statusDiv.style.backgroundColor = '#d4edda';
+        });
+        
+        socket.on('disconnect', () => {
+            statusDiv.textContent = 'Disconnected - Trying to reconnect...';
+            statusDiv.style.backgroundColor = '#f8d7da';
+        });
+    </script>
+</body>
+</html>

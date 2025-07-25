@@ -1,0 +1,2 @@
+# Ignore socket.io built files (not needed for deployment)
+socket.io/
