@@ -111,6 +111,33 @@
             box-shadow: 0 0 0 2px rgba(100, 100, 255, 0.3);
         }
 
+        .problem-section {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            border-left: 4px solid #007bff;
+        }
+
+        .problem-title {
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+
+        .problem-text {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            white-space: pre-wrap;
+            font-family: Arial, sans-serif;
+        }
+
+        .hidden {
+            display: none;
+        }
+
 
     </style>
 </head>
@@ -119,8 +146,12 @@
         <div id="studentInfo">Loading...</div>
     </div>
     
+    <div class="problem-section hidden" id="problemSection">
+        <div class="problem-title">Problem Statement:</div>
+        <div class="problem-text" id="problemText">No problem statement posted yet.</div>
+    </div>
 
-<select id="language" class="custom-select">
+<select id="language" class="custom-select" title="Select programming language">
   <option value="52">C</option>
   <option value="54">C++</option>
   <option value="62">Java</option>
@@ -158,6 +189,7 @@
 async function submitCode() {
   const code = document.getElementById("code").value;
   const languageId = document.getElementById("language").value;
+  const problemText = document.getElementById("problemText").textContent;
 
   const outputElement = document.getElementById("output");
   outputElement.textContent = "Analyzing code...";
@@ -172,12 +204,46 @@ async function submitCode() {
   
   const languageName = languageNames[languageId] || "Unknown";
 
-  const prompt = `You are a code execution engine and compiler. Analyze this ${languageName} code and provide:
+  let prompt;
+  if (problemText && problemText !== "No problem statement posted yet.") {
+    // If there's a problem statement, evaluate against it
+    prompt = `You are a code execution engine, compiler, and coding assignment evaluator. 
 
-1. If the code has syntax errors, provide compilation error messages like a real compiler
-2. If the code has logical errors, explain what's wrong and give hints
-3. If the code is correct, execute it mentally and provide the expected output
-4. Always be helpful and educational in your response
+PROBLEM STATEMENT:
+${problemText}
+
+STUDENT'S CODE:
+Language: ${languageName}
+\`\`\`${languageName.toLowerCase()}
+${code}
+\`\`\`
+
+Please evaluate this code and provide:
+
+1. **Compilation Check**: If there are syntax errors, provide compilation error messages like a real compiler
+2. **Execution**: If the code compiles, execute it mentally and provide the expected output
+3. **Problem Evaluation**: 
+   - Does this code correctly solve the given problem?
+   - Does it meet all the requirements?
+   - Is the logic correct for the problem statement?
+
+4. **Final Assessment**: End with one of these status indicators:
+   - "STATUS: COMPILATION_ERROR" if there are syntax/compilation errors
+   - "STATUS: INCORRECT" if the code compiles but doesn't solve the problem correctly
+   - "STATUS: PARTIALLY_CORRECT" if the code partially addresses the problem
+   - "STATUS: CORRECT" if the code completely and correctly solves the problem
+
+Format your response clearly with sections for compilation, execution, evaluation, and final status.`;
+  } else {
+    // Original behavior if no problem statement
+    prompt = `You are a code execution engine and compiler. Analyze this ${languageName} code and provide:
+
+1. **Compilation Check**: If there are syntax errors, provide compilation error messages like a real compiler
+2. **Execution**: If the code compiles successfully, execute it mentally and provide the expected output
+3. **Summary**: End with one of these status indicators:
+   - "STATUS: COMPILATION_ERROR" if there are syntax/compilation errors
+   - "STATUS: RUNTIME_ERROR" if the code compiles but has runtime issues
+   - "STATUS: SUCCESS" if the code compiles and runs successfully
 
 Language: ${languageName}
 Code:
@@ -185,13 +251,17 @@ Code:
 ${code}
 \`\`\`
 
-Provide your response as if you are both a compiler and execution engine. If there are errors, format them clearly. If the code runs successfully, show the expected output.`;
+Provide your response clearly with compilation check, execution result, and status summary.`;
+  }
 
   console.log("Analyzing code with Gemini...");
   const output = await promptGemini(prompt);
   console.log("Gemini analysis:", output);
 
   outputElement.innerHTML = marked.parse(output);
+
+  // Always update student status based on evaluation
+  updateStudentStatus(output, problemText && problemText !== "No problem statement posted yet.");
 }
 
 
@@ -229,31 +299,110 @@ async function promptGemini(promptText) {
   }
 }
 
-        // Get student ID from URL parameters
+function updateStudentStatus(geminiOutput, hasProblemStatement) {
+  let status = 'working';
+  
+  const outputLower = geminiOutput.toLowerCase();
+  console.log("Analyzing Gemini output for status:", outputLower);
+  
+  // Look for explicit status indicators first
+  if (outputLower.includes('status: compilation_error')) {
+    status = 'error';
+  } else if (outputLower.includes('status: runtime_error')) {
+    status = 'error';
+  } else if (outputLower.includes('status: incorrect')) {
+    status = 'error';
+  } else if (outputLower.includes('status: partially_correct')) {
+    status = 'working';
+  } else if (outputLower.includes('status: correct')) {
+    status = 'done';
+  } else if (outputLower.includes('status: success')) {
+    status = 'done';
+  } else {
+    // Fallback to keyword detection
+    if (hasProblemStatement) {
+      // If there's a problem statement, look for evaluation keywords
+      if (outputLower.includes('correct') && !outputLower.includes('incorrect')) {
+        if (outputLower.includes('partially_correct') || outputLower.includes('partially correct')) {
+          status = 'working';
+        } else {
+          status = 'done';
+        }
+      } else if (outputLower.includes('incorrect') || outputLower.includes('wrong') || 
+                 outputLower.includes('does not solve') || outputLower.includes('doesn\'t solve')) {
+        status = 'error';
+      }
+    } else {
+      // Without problem statement, just check for compilation and execution success
+      if (outputLower.includes('compilation error') || outputLower.includes('syntax error') || 
+          outputLower.includes('compile error') || outputLower.includes('error:')) {
+        status = 'error';
+      } else if (outputLower.includes('output:') || outputLower.includes('expected output') || 
+                 outputLower.includes('result:') || outputLower.includes('runs successfully') ||
+                 outputLower.includes('executes successfully') || outputLower.includes('no errors')) {
+        status = 'done';
+      }
+    }
+  }
+  
+  console.log("Determined status:", status);
+  
+  // Send status update to server
+  socket.emit('student_status_update', {
+    studentId: studentId,
+    classCode: classCode,
+    status: status
+  });
+}
+
+        // Get student ID and class code from URL parameters
         const urlParams = new URLSearchParams(window.location.search);
         const studentId = urlParams.get('id');
+        const classCode = urlParams.get('code');
         
-        if (!studentId) {
+        if (!studentId || !classCode) {
             alert('Invalid student session. Redirecting to home page.');
             window.location.href = '/';
         }
         
         // Update student info display
-        document.getElementById('studentInfo').textContent = `Student ID: ${studentId}`;
+        document.getElementById('studentInfo').textContent = `Student ID: ${studentId} | Class: ${classCode}`;
         
         const socket = io();
         const codeEditor = document.getElementById('code');
         const statusDiv = document.getElementById('status');
         
-        // Join as student and get current text
-        socket.emit('student_join', studentId);
+        // Join as student with class code
+        socket.emit('student_join', { studentId, classCode });
         
         // Receive current text when joining
         socket.on('student_current_text', (data) => {
-            if (data.studentId === studentId) {
+            if (data.studentId === studentId && data.classCode === classCode) {
                 codeEditor.value = data.text;
+                if (data.problemStatement) {
+                    displayProblemStatement(data.problemStatement);
+                }
             }
         });
+
+        // Receive problem statement updates
+        socket.on('problem_statement_updated', (data) => {
+            if (data.classCode === classCode) {
+                displayProblemStatement(data.problemStatement);
+            }
+        });
+
+        function displayProblemStatement(problemStatement) {
+            const problemSection = document.getElementById('problemSection');
+            const problemText = document.getElementById('problemText');
+            
+            if (problemStatement) {
+                problemText.textContent = problemStatement;
+                problemSection.classList.remove('hidden');
+            } else {
+                problemSection.classList.add('hidden');
+            }
+        }
         
         // Send text updates to server
         let timeout;
@@ -262,7 +411,8 @@ async function promptGemini(promptText) {
             timeout = setTimeout(() => {
                 socket.emit('student_text_update', {
                     studentId: studentId,
-                    text: codeEditor.value
+                    text: codeEditor.value,
+                    classCode: classCode
                 });
             }, 300); // Debounce for 300ms
         });

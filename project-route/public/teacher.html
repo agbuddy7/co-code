@@ -60,13 +60,83 @@
             color: #666;
             margin-top: 5px;
         }
+        .class-code-display {
+            background: #28a745;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .problem-section {
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .problem-textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            resize: vertical;
+        }
+        .student-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status-working {
+            background: #ffc107;
+            color: #000;
+        }
+        .status-done {
+            background: #28a745;
+            color: white;
+        }
+        .status-error {
+            background: #dc3545;
+            color: white;
+        }
+        .post-button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .problem-status {
+            margin-top: 10px;
+            color: green;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Teacher Dashboard</h1>
-        <p>Real-time view of all student coding sessions</p>
+        <div id="classCodeDisplay" class="class-code-display">
+            Class Code: <span id="classCode">Loading...</span>
+        </div>
         <div id="connectionStatus">Connecting...</div>
+    </div>
+    
+    <div class="problem-section">
+        <h3>Problem Statement</h3>
+        <textarea id="problemStatement" class="problem-textarea" placeholder="Enter the coding problem/question for students..."></textarea>
+        <br><br>
+        <button onclick="updateProblemStatement()" class="post-button">
+            Post Problem Statement
+        </button>
+        <div id="problemStatus" class="problem-status"></div>
     </div>
     
     <div class="students-container" id="studentsContainer">
@@ -75,29 +145,59 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
+        // Get teacher ID and class code from URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const classCode = urlParams.get('code');
+        const teacherId = urlParams.get('teacherId');
+        
+        if (!classCode || !teacherId) {
+            alert('Invalid teacher session. Redirecting to home page.');
+            window.location.href = '/';
+        }
+        
+        // Display class code
+        document.getElementById('classCode').textContent = classCode;
+        
         const socket = io();
         const studentsContainer = document.getElementById('studentsContainer');
         const connectionStatus = document.getElementById('connectionStatus');
+        const problemTextarea = document.getElementById('problemStatement');
+        const problemStatus = document.getElementById('problemStatus');
         
         let students = {};
+        let currentProblemStatement = null;
         
-        // Join as teacher
-        socket.emit('teacher_join');
+        // Join as teacher with class code
+        socket.emit('teacher_join', classCode);
         
         // Receive all students data when joining
-        socket.on('all_students_data', (studentsData) => {
-            students = {};
-            studentsData.forEach(student => {
-                students[student.id] = student;
-            });
-            updateStudentsDisplay();
+        socket.on('all_students_data', (data) => {
+            if (data.classCode === classCode) {
+                students = {};
+                data.students.forEach(student => {
+                    students[student.id] = student;
+                });
+                if (data.problemStatement) {
+                    currentProblemStatement = data.problemStatement;
+                    problemTextarea.value = data.problemStatement;
+                }
+                updateStudentsDisplay();
+            }
         });
         
         // Receive real-time text updates
         socket.on('text_updated', (data) => {
-            if (students[data.studentId]) {
+            if (data.classCode === classCode && students[data.studentId]) {
                 students[data.studentId].currentText = data.text;
                 updateStudentCode(data.studentId, data.text);
+            }
+        });
+
+        // Receive student status updates
+        socket.on('student_status_changed', (data) => {
+            if (data.classCode === classCode && students[data.studentId]) {
+                students[data.studentId].status = data.status;
+                updateStudentStatus(data.studentId, data.status);
             }
         });
         
@@ -116,17 +216,21 @@
             const studentIds = Object.keys(students);
             
             if (studentIds.length === 0) {
-                studentsContainer.innerHTML = '<div class="no-students">No students connected yet. Students can join at: <strong>http://localhost:3000</strong></div>';
+                studentsContainer.innerHTML = `<div class="no-students">No students connected yet. Share this class code with students: <strong>${classCode}</strong></div>`;
                 return;
             }
             
             let html = '';
             studentIds.forEach(studentId => {
                 const student = students[studentId];
+                const statusClass = `status-${student.status || 'working'}`;
+                const statusText = (student.status || 'working').toUpperCase();
+                
                 html += `
                     <div class="student-panel" id="panel_${studentId}">
                         <div class="student-header">
                             ${student.name}
+                            <span class="student-status ${statusClass}">${statusText}</span>
                             <div class="student-info">ID: ${studentId} | Joined: ${new Date(student.joinTime).toLocaleTimeString()}</div>
                         </div>
                         <div class="student-code" id="code_${studentId}">${student.currentText || 'No code yet...'}</div>
@@ -144,9 +248,57 @@
             }
         }
         
+        function updateStudentStatus(studentId, status) {
+            const panel = document.getElementById(`panel_${studentId}`);
+            if (panel) {
+                const statusElement = panel.querySelector('.student-status');
+                if (statusElement) {
+                    statusElement.className = `student-status status-${status}`;
+                    statusElement.textContent = status.toUpperCase();
+                }
+            }
+        }
+        
+        async function updateProblemStatement() {
+            const problemText = problemTextarea.value.trim();
+            
+            if (!problemText) {
+                problemStatus.textContent = 'Please enter a problem statement';
+                problemStatus.style.color = 'red';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/set-problem/${classCode}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        problemStatement: problemText,
+                        teacherId: teacherId 
+                    })
+                });
+                
+                if (response.ok) {
+                    currentProblemStatement = problemText;
+                    socket.emit('problem_updated', { classCode, problemStatement: problemText });
+                    problemStatus.textContent = 'Problem statement posted successfully!';
+                    problemStatus.style.color = 'green';
+                } else {
+                    problemStatus.textContent = 'Error posting problem statement';
+                    problemStatus.style.color = 'red';
+                }
+            } catch (error) {
+                problemStatus.textContent = 'Error posting problem statement';
+                problemStatus.style.color = 'red';
+                console.error('Error:', error);
+            }
+        }
+        
         // Refresh students list every 30 seconds
         setInterval(() => {
-            socket.emit('teacher_join');
+            socket.emit('teacher_join', classCode);
         }, 30000);
     </script>
 </body>
