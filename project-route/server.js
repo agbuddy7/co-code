@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const path = require('path');
@@ -131,6 +132,48 @@ app.post('/update-status/:classCode/:studentId', (req, res) => {
     res.json({ success: true });
   } else {
     res.status(404).json({ error: 'Student not found' });
+  }
+});
+
+// API endpoint to analyze code with Gemini
+app.post('/api/analyze-code', async (req, res) => {
+  try {
+    const { promptText } = req.body;
+    const API_KEY = process.env.GEMINI_API_KEY;
+
+    if (!API_KEY) {
+      return res.json({ success: false, error: 'Gemini API key not configured' });
+    }
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: promptText }]
+            }
+          ]
+        })
+      }
+    );
+
+    const data = await response.json();
+    
+    if (data.candidates && data.candidates.length > 0) {
+      res.json({ success: true, result: data.candidates[0].content.parts[0].text });
+    } else if (data.error) {
+      res.json({ success: false, error: `Gemini API error: ${data.error.message}` });
+    } else {
+      res.json({ success: false, error: "No response from Gemini." });
+    }
+  } catch (error) {
+    console.error('Error calling Gemini API:', error);
+    res.json({ success: false, error: error.message });
   }
 });
 
