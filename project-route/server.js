@@ -141,10 +141,15 @@ app.post('/api/analyze-code', async (req, res) => {
     const { promptText } = req.body;
     const API_KEY = process.env.GEMINI_API_KEY;
 
+    console.log('API Key exists:', !!API_KEY);
+    console.log('Environment:', process.env.NODE_ENV);
+
     if (!API_KEY) {
-      return res.json({ success: false, error: 'Gemini API key not configured' });
+      console.error('GEMINI_API_KEY not found in environment variables');
+      return res.json({ success: false, error: 'Gemini API key not configured. Please set GEMINI_API_KEY environment variable.' });
     }
 
+    console.log('Making request to Gemini API...');
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
       {
@@ -163,10 +168,12 @@ app.post('/api/analyze-code', async (req, res) => {
     );
 
     const data = await response.json();
+    console.log('Gemini API response status:', response.status);
     
     if (data.candidates && data.candidates.length > 0) {
       res.json({ success: true, result: data.candidates[0].content.parts[0].text });
     } else if (data.error) {
+      console.error('Gemini API error:', data.error);
       res.json({ success: false, error: `Gemini API error: ${data.error.message}` });
     } else {
       res.json({ success: false, error: "No response from Gemini." });
